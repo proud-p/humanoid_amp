@@ -50,11 +50,11 @@ gym.register(
 
 gym.register(
     id="Isaac-G1-AMP-Dance-Direct-v0",
-    entry_point=f"{__name__}.humanoid_amp_env:HumanoidAmpEnv",
+    entry_point=f"{__name__}.g1_amp_env:G1AmpEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.humanoid_amp_env_cfg:HumanoidAmpDanceEnvCfg",
-        "skrl_amp_cfg_entry_point": f"{agents.__name__}:skrl_dance_amp_cfg.yaml",
+        "skrl_amp_cfg_entry_point": f"{agents.__name__}:skrl_g1_dance_amp_cfg.yaml",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_g1_dance_amp_cfg.yaml",
     },
 )
