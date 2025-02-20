@@ -29,18 +29,18 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     decimation = 2
 
     # spaces
-    observation_space = 81 #TODO
+    observation_space = 83 #TODO
     action_space = 29
     state_space = 0
     num_amp_observations = 2
-    amp_observation_space = 81
+    amp_observation_space = 83
 
     early_termination = True
     termination_height = 0.5
 
     motion_file: str = MISSING
     reference_body = "pelvis"
-    reset_strategy = "random"  # default, random, random-start
+    reset_strategy = "default"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
 
     * default: pose and joint states are set to the initial state of the asset.
@@ -64,7 +64,7 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     # robot
     robot: ArticulationCfg = ArticulationCfg(
         spawn=sim_utils.UsdFileCfg(
-            usd_path=f"/home/lch/IsaacLab/humanoid_amp/g1.usd",
+            usd_path=f"/home/lch/IsaacLab/humanoid_amp/usd/g1_29dof_rev_1_0.usd",
             activate_contact_sensors=True,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 disable_gravity=False,

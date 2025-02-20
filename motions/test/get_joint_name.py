@@ -30,7 +30,8 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab_assets import FRANKA_PANDA_HIGH_PD_CFG  # isort:skip G1_MINIMAL_CFG
 from isaaclab_assets import G1_MINIMAL_CFG  
-
+from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.assets import ArticulationCfg
 # ========= 定义桌面场景配置 ==========
 @configclass
 class TableTopSceneCfg(InteractiveSceneCfg):
@@ -45,11 +46,107 @@ class TableTopSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75)),
     )
 
-    # 根据命令行选择机器人模型，目前只支持 franka_panda（加载的是 G1_MINIMAL_CFG）
-    if args_cli.robot == "franka_panda":
-        robot = G1_MINIMAL_CFG.replace(prim_path="/World/Robot")
-    else:
-        raise ValueError(f"Robot {args_cli.robot} is not supported. Valid: franka_panda")
+    robot: ArticulationCfg = ArticulationCfg(
+        prim_path="/World/Robot",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=f"/home/lch/IsaacLab/humanoid_amp/usd/g1_29dof_rev_1_0.usd",
+            activate_contact_sensors=True,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False,
+                retain_accelerations=False,
+                linear_damping=0.0,
+                angular_damping=0.0,
+                max_linear_velocity=1000.0,
+                max_angular_velocity=1000.0,
+                max_depenetration_velocity=1.0,
+            ),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+            ),
+        ),
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.74),
+            joint_pos={
+                ".*_hip_pitch_joint": -0.20,
+                ".*_knee_joint": 0.42,
+                ".*_ankle_pitch_joint": -0.23,
+                # ".*_elbow_pitch_joint": 0.87,
+                "left_shoulder_roll_joint": 0.16,
+                "left_shoulder_pitch_joint": 0.35,
+                "right_shoulder_roll_joint": -0.16,
+                "right_shoulder_pitch_joint": 0.35,
+            },
+            joint_vel={".*": 0.0},
+        ),
+        soft_joint_pos_limit_factor=0.9,
+        actuators={
+            "legs": ImplicitActuatorCfg(
+                joint_names_expr=[
+                    ".*_hip_yaw_joint",
+                    ".*_hip_roll_joint",
+                    ".*_hip_pitch_joint",
+                    ".*_knee_joint",
+                    "waist_yaw_joint",
+                    "waist_roll_joint",
+                    "waist_pitch_joint",
+                ],
+                effort_limit=300,
+                velocity_limit=100.0,
+                stiffness={
+                    ".*_hip_yaw_joint": 150.0,
+                    ".*_hip_roll_joint": 150.0,
+                    ".*_hip_pitch_joint": 200.0,
+                    ".*_knee_joint": 200.0,
+                    "waist_yaw_joint": 200.0,
+                    "waist_roll_joint": 200.0,
+                    "waist_pitch_joint": 200.0,
+                },
+                damping={
+                    ".*_hip_yaw_joint": 5.0,
+                    ".*_hip_roll_joint": 5.0,
+                    ".*_hip_pitch_joint": 5.0,
+                    ".*_knee_joint": 5.0,
+                    "waist_yaw_joint": 5.0,
+                    "waist_roll_joint": 5.0,
+                    "waist_pitch_joint": 5.0,
+                },
+                armature={
+                    ".*_hip_.*": 0.01,
+                    ".*_knee_joint": 0.01,
+                    "waist_yaw_joint": 0.01,
+                    "waist_roll_joint": 0.01,
+                    "waist_pitch_joint": 0.01,
+                },
+            ),
+            "feet": ImplicitActuatorCfg(
+                effort_limit=20,
+                joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
+                stiffness=20.0,
+                damping=2.0,
+                armature=0.01,
+            ),
+            "arms": ImplicitActuatorCfg(
+                joint_names_expr=[
+                    ".*_shoulder_pitch_joint",
+                    ".*_shoulder_roll_joint",
+                    ".*_shoulder_yaw_joint",
+                    ".*_elbow_joint",
+                    ".*_wrist_.*",
+
+                ],
+                effort_limit=300,
+                velocity_limit=100.0,
+                stiffness=40.0,
+                damping=10.0,
+                armature={
+                    ".*_shoulder_.*": 0.01,
+                    ".*_elbow_.*": 0.01,
+                    ".*_wrist_.*": 0.01,
+
+                },
+            ),
+        },
+    )
 
 # ========= 辅助函数：打印机器人资产下所有 prim 的路径 ==========
 def list_robot_prims():
@@ -80,6 +177,13 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     
     print("解析到的关节名称列表:", robot.joint_names)
     print("解析到的刚体名称列表:", robot.body_names)
+    print(robot.data.joint_pos.shape)
+    print(robot.data.joint_vel.shape)
+    # self.robot.data.body_pos_w[:, self.ref_body_index],
+    # self.robot.data.body_quat_w[:, self.ref_body_index],
+    # self.robot.data.body_lin_vel_w[:, self.ref_body_index],
+    # self.robot.data.body_ang_vel_w[:, self.ref_body_index],
+    # self.robot.data.body_pos_w[:, self.key_body_indexes],
 
     step_count = 0
     while simulation_app.is_running():
@@ -110,3 +214,7 @@ def main():
 if __name__ == "__main__":
     main()
     simulation_app.close()
+# 解析到的关节名称列表: ['left_hip_pitch_joint', 'right_hip_pitch_joint', 'waist_yaw_joint', 'left_hip_roll_joint', 'right_hip_roll_joint', 'waist_roll_joint', 'left_hip_yaw_joint', 'right_hip_yaw_joint', 'waist_pitch_joint', 'left_knee_joint', 'right_knee_joint', 'left_shoulder_pitch_joint', 'right_shoulder_pitch_joint', 'left_ankle_pitch_joint', 'right_ankle_pitch_joint', 'left_shoulder_roll_joint', 'right_shoulder_roll_joint', 'left_ankle_roll_joint', 'right_ankle_roll_joint', 'left_shoulder_yaw_joint', 'right_shoulder_yaw_joint', 'left_elbow_joint', 'right_elbow_joint', 'left_wrist_roll_joint', 'right_wrist_roll_joint', 'left_wrist_pitch_joint', 'right_wrist_pitch_joint', 'left_wrist_yaw_joint', 'right_wrist_yaw_joint']
+# 解析到的刚体名称列表: ['pelvis', 'imu_in_pelvis', 'left_hip_pitch_link', 'pelvis_contour_link', 'right_hip_pitch_link', 'waist_yaw_link', 'left_hip_roll_link', 'right_hip_roll_link', 'waist_roll_link', 'left_hip_yaw_link', 'right_hip_yaw_link', 'torso_link', 'left_knee_link', 'right_knee_link', 'd435_link', 'head_link', 'imu_in_torso', 'left_shoulder_pitch_link', 'logo_link', 'mid360_link', 'right_shoulder_pitch_link', 'left_ankle_pitch_link', 'right_ankle_pitch_link', 'left_shoulder_roll_link', 'right_shoulder_roll_link', 'left_ankle_roll_link', 'right_ankle_roll_link', 'left_shoulder_yaw_link', 'right_shoulder_yaw_link', 'left_elbow_link', 'right_elbow_link', 'left_wrist_roll_link', 'right_wrist_roll_link', 'left_wrist_pitch_link', 'right_wrist_pitch_link', 'left_wrist_yaw_link', 'right_wrist_yaw_link', 'left_rubber_hand', 'right_rubber_hand']
+# torch.Size([1, 29])
+# torch.Size([1, 29])

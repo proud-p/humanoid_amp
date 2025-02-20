@@ -15,14 +15,14 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import quat_rotate
 
-from .humanoid_amp_env_cfg import HumanoidAmpEnvCfg
+from .g1_amp_env_cfg import G1AmpEnvCfg
 from .motions import MotionLoader
 
 
-class HumanoidAmpEnv(DirectRLEnv):
-    cfg: HumanoidAmpEnvCfg
+class G1AmpEnv(DirectRLEnv):
+    cfg: G1AmpEnvCfg
 
-    def __init__(self, cfg: HumanoidAmpEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: G1AmpEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # action offset and scale
@@ -30,12 +30,15 @@ class HumanoidAmpEnv(DirectRLEnv):
         dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1]
         self.action_offset = 0.5 * (dof_upper_limits + dof_lower_limits)
         self.action_scale = dof_upper_limits - dof_lower_limits
+        print("DOF LIMITS")
+        print(dof_lower_limits)
+        print(dof_upper_limits)
 
         # load motion
         self._motion_loader = MotionLoader(motion_file=self.cfg.motion_file, device=self.device)
 
         # DOF and key body indexes
-        key_body_names = ["right_hand", "left_hand", "right_foot", "left_foot"]
+        key_body_names = ["right_rubber_hand", "left_rubber_hand", "right_ankle_roll_link", "left_ankle_roll_link"]
         self.ref_body_index = self.robot.data.body_names.index(self.cfg.reference_body)
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
         self.motion_dof_indexes = self._motion_loader.get_dof_index(self.robot.data.joint_names)

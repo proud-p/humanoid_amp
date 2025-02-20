@@ -78,6 +78,7 @@ class MotionViewer:
         # plot ground plane
         x, y = np.meshgrid([center[0] - diff[0], center[0] + diff[0]], [center[1] - diff[1], center[1] + diff[1]])
         self._figure_axes.plot_surface(x, y, np.zeros_like(x), color="green", alpha=0.2)
+        print
         # print metadata
         self._figure_axes.set_xlabel("X")
         self._figure_axes.set_ylabel("Y")
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, required=True, help="Motion file")
+    parser.add_argument("--file", type=str, required=False, default="humanoid_amp/motions/G1_dance.npz", help="Motion file")
     parser.add_argument(
         "--render-scene",
         action="store_true",
@@ -118,6 +119,7 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument("--matplotlib-backend", type=str, default="TkAgg", help="Matplotlib interactive backend")
+    
     args, _ = parser.parse_known_args()
 
     # https://matplotlib.org/stable/users/explain/figure/backends.html#interactive-backends
