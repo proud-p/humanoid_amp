@@ -54,7 +54,12 @@ class MotionViewer:
         vertices = self._body_positions[self._current_frame]
         # draw skeleton state
         self._figure_axes.clear()
-        self._figure_axes.scatter(*vertices.T, color="black", depthshade=False)
+        
+
+        colors = ["black"] * len(vertices)
+        colors[0] = "red"
+        self._figure_axes.scatter(*vertices.T, color=colors, depthshade=False)
+        # self._figure_axes.scatter(*vertices.T, color="black", depthshade=False)
         # adjust exes according to motion view
         # - scene
         if self._render_scene:
@@ -78,7 +83,6 @@ class MotionViewer:
         # plot ground plane
         x, y = np.meshgrid([center[0] - diff[0], center[0] + diff[0]], [center[1] - diff[1], center[1] + diff[1]])
         self._figure_axes.plot_surface(x, y, np.zeros_like(x), color="green", alpha=0.2)
-        print
         # print metadata
         self._figure_axes.set_xlabel("X")
         self._figure_axes.set_ylabel("Y")

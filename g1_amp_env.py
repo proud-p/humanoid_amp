@@ -30,17 +30,19 @@ class G1AmpEnv(DirectRLEnv):
         dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1]
         self.action_offset = 0.5 * (dof_upper_limits + dof_lower_limits)
         self.action_scale = dof_upper_limits - dof_lower_limits
-        print("DOF LIMITS")
-        print(dof_lower_limits)
-        print(dof_upper_limits)
+        # print("DOF LIMITS")
+        # print(dof_lower_limits)
+        # print(dof_upper_limits)
 
         # load motion
         self._motion_loader = MotionLoader(motion_file=self.cfg.motion_file, device=self.device)
 
-        # DOF and key body indexes
+        # DOF and key body indexes ["pelvis"] 
+        key_body_names = ["pelvis"]  
         key_body_names = ["right_rubber_hand", "left_rubber_hand", "right_ankle_roll_link", "left_ankle_roll_link"]
         self.ref_body_index = self.robot.data.body_names.index(self.cfg.reference_body)
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
+        # Used to for reset strategy
         self.motion_dof_indexes = self._motion_loader.get_dof_index(self.robot.data.joint_names)
         self.motion_ref_body_index = self._motion_loader.get_body_index([self.cfg.reference_body])[0]
         self.motion_key_body_indexes = self._motion_loader.get_body_index(key_body_names)
@@ -120,9 +122,9 @@ class G1AmpEnv(DirectRLEnv):
 
         if self.cfg.reset_strategy == "default":
             root_state, joint_pos, joint_vel = self._reset_strategy_default(env_ids)
-        elif self.cfg.reset_strategy.startswith("random"):
-            start = "start" in self.cfg.reset_strategy
-            root_state, joint_pos, joint_vel = self._reset_strategy_random(env_ids, start)
+        # elif self.cfg.reset_strategy.startswith("random"):
+        #     start = "start" in self.cfg.reset_strategy
+        #     root_state, joint_pos, joint_vel = self._reset_strategy_random(env_ids, start)
         else:
             raise ValueError(f"Unknown reset strategy: {self.cfg.reset_strategy}")
 

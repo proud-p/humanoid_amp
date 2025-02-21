@@ -39,7 +39,7 @@ class TableTopSceneCfg(InteractiveSceneCfg):
     ground = AssetBaseCfg(
         prim_path="/World/defaultGroundPlane",
         spawn=sim_utils.GroundPlaneCfg(),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -1.05)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
     )
     dome_light = AssetBaseCfg(
         prim_path="/World/Light",
@@ -65,7 +65,7 @@ class TableTopSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.74),
+            pos=(0.0, 1.0, 0.8),
             joint_pos={
                 ".*_hip_pitch_joint": -0.20,
                 ".*_knee_joint": 0.42,
