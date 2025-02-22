@@ -24,14 +24,14 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     """Humanoid AMP environment config (base class)."""
     
     # reward
-    rew_termination = -1
-    rew_action_l2 = -0.01
-    rew_joint_pos_limits = -5
-    rew_joint_acc_l2 =-0.01
-    rew_joint_vel_l2= -0.01
+    rew_termination = -0
+    rew_action_l2 = -0.00
+    rew_joint_pos_limits = -0
+    rew_joint_acc_l2 =-0.00
+    rew_joint_vel_l2= -0.00
 
     # env
-    episode_length_s = 20.0
+    episode_length_s = 10.0
     decimation = 2
 
     # spaces
@@ -46,7 +46,7 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
 
     motion_file: str = MISSING
     reference_body = "pelvis"
-    reset_strategy = "default"  # default, random, random-start
+    reset_strategy = "random"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
 
     * default: pose and joint states are set to the initial state of the asset.
@@ -65,7 +65,7 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     )
 
     # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1024, env_spacing=4.0, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=4.0, replicate_physics=True)
 
     # robot
     robot: ArticulationCfg = G1_CFG.replace(prim_path="/World/envs/env_.*/Robot")

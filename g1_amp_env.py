@@ -118,7 +118,7 @@ class G1AmpEnv(DirectRLEnv):
     # def _get_rewards(self) -> torch.Tensor:
     #     return torch.ones((self.num_envs,), dtype=torch.float32, device=self.sim.device)
     def _get_rewards(self) -> torch.Tensor:
-        total_reward = compute_rewards(
+        total_reward, reward_log = compute_rewards(
             self.cfg.rew_termination,
             self.cfg.rew_action_l2,
             self.cfg.rew_joint_pos_limits,
@@ -131,6 +131,7 @@ class G1AmpEnv(DirectRLEnv):
             self.robot.data.joint_acc,
             self.robot.data.joint_vel,    
         )
+        self.extras["log"] = reward_log
         return total_reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -185,10 +186,10 @@ class G1AmpEnv(DirectRLEnv):
         ) = self._motion_loader.sample(num_samples=num_samples, times=times)
 
         # get root transforms (the humanoid torso)
-        motion_torso_index = self._motion_loader.get_body_index(["torso"])[0]
+        motion_torso_index = self._motion_loader.get_body_index(["pelvis"])[0]
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, 0:3] = body_positions[:, motion_torso_index] + self.scene.env_origins[env_ids]
-        root_state[:, 2] += 0.15  # lift the humanoid slightly to avoid collisions with the ground
+        root_state[:, 2] += 0.05  # lift the humanoid slightly to avoid collisions with the ground
         root_state[:, 3:7] = body_rotations[:, motion_torso_index]
         root_state[:, 7:10] = body_linear_velocities[:, motion_torso_index]
         root_state[:, 10:13] = body_angular_velocities[:, motion_torso_index]
@@ -292,4 +293,12 @@ def compute_rewards(
     rew_joint_acc_l2 = rew_scale_joint_acc_l2 * torch.sum(torch.square(joint_acc), dim=1)
     rew_joint_vel_l2 = rew_scale_joint_vel_l2 * torch.sum(torch.square(joint_vel), dim=1)
     total_reward = rew_termination + rew_action_l2 + rew_joint_pos_limits + rew_joint_acc_l2 + rew_joint_vel_l2
-    return total_reward
+    
+    log = {
+        "rew_termination": (rew_termination).mean(),
+        "rew_action_l2": (rew_action_l2).mean(),
+        "rew_joint_pos_limits": (rew_joint_pos_limits).mean(),
+        "rew_joint_acc_l2": (rew_joint_acc_l2).mean(),
+        "rew_joint_vel_l2": (rew_joint_vel_l2).mean(),
+        }
+    return total_reward, log

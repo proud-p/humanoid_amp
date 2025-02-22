@@ -131,7 +131,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, required=False, default="humanoid_amp/motions/g1.npz", help="Motion file")
+    parser.add_argument("--file", type=str, required=False, default="humanoid_amp/motions/G1_dance.npz", help="Motion file")
     parser.add_argument(
         "--render-scene",
         action="store_true",
