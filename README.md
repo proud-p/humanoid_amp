@@ -9,3 +9,6 @@ Train:
 
 Eval：
 ./isaaclab.sh -p ~/IsaacLab/skrl/play.py --task Isaac-Humanoid-AMP-Run-Direct-v0 --num_envs 32 
+
+TensorBoard:
+./isaaclab.sh -p -m tensorboard.main --logdir logs/skrl/

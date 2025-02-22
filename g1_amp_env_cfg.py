@@ -22,17 +22,24 @@ MOTIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "motions"
 @configclass
 class G1AmpEnvCfg(DirectRLEnvCfg):
     """Humanoid AMP environment config (base class)."""
+    
+    # reward
+    rew_termination = -1
+    rew_action_l2 = -0.01
+    rew_joint_pos_limits = -5
+    rew_joint_acc_l2 =-0.01
+    rew_joint_vel_l2= -0.01
 
     # env
     episode_length_s = 20.0
     decimation = 2
 
     # spaces
-    observation_space = 83 #TODO
+    observation_space =  71 + 3 * 10 #TODO
     action_space = 29
     state_space = 0
     num_amp_observations = 2
-    amp_observation_space = 83
+    amp_observation_space = 71 + 3 * 10 
 
     early_termination = True
     termination_height = 0.5
@@ -49,7 +56,7 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 30,
+        dt=1 / 60,
         render_interval=decimation,
         physx=PhysxCfg(
             gpu_found_lost_pairs_capacity=2**23,

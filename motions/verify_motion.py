@@ -1,5 +1,6 @@
 import numpy as np
 import argparse
+np.set_printoptions(threshold=.100)
 
 def verify_motion_file(npz_file):
     # 加载npz文件
@@ -14,6 +15,8 @@ def verify_motion_file(npz_file):
             print(f"关节名称: {arr}")
         if key == 'body_names':
             print(f"身体部位名称: {arr}")
+        if key == "body_positions":
+            print(f"身体部位位置: {arr}")
     
     # 示例：读取FPS（每秒帧数）
     if 'fps' in data:
