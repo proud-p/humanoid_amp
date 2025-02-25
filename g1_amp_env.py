@@ -50,6 +50,11 @@ class G1AmpEnv(DirectRLEnv):
             "left_rubber_hand",
             "right_ankle_roll_link",
             "left_ankle_roll_link"]
+        # key_body_names = [
+        #     "right_rubber_hand",
+        #     "left_rubber_hand",
+        #     "right_ankle_roll_link",
+        #     "left_ankle_roll_link"]
         self.ref_body_index = self.robot.data.body_names.index(self.cfg.reference_body)
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
         # Used to for reset strategy

@@ -71,8 +71,8 @@ class MotionViewer:
         colors = ["black"] * len(vertices)
         colors[0] = "red"
         colors[1] = "blue"
-        colors[4] = "purple"
-        colors[5] = "purple"
+        colors[2] = "blue"
+        # colors[5] = "purple"
         colors[-1] = "green"
         colors[-2] = "green"
         colors[-3] = "yellow"
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, required=False, default="humanoid_amp/motions/G1_dance.npz", help="Motion file")
+    parser.add_argument("--file", type=str, required=False, default="motions/G1_dance.npz", help="Motion file")
     parser.add_argument(
         "--render-scene",
         action="store_true",
