@@ -19,7 +19,7 @@ TensorBoard:
 ```
 ./isaaclab.sh -p -m tensorboard.main --logdir logs/skrl/
 ```
-The parameters of the code in this repository have not been fine-tuned. Currently, the walk performance is acceptable, but the dance performance is quite poor. Due to personal bussiness, I will begin to debug until summer.
+The parameters of the code in this repository have not been fine-tuned. Currently, the walk performance is acceptable, but the dance performance is quite poor. Due to personal bussiness, I will not begin to debug until summer.
 
 The dataset and URDF files are from [Hugging Face](https://huggingface.co/datasets/unitreerobotics/LAFAN1_Retargeting_Dataset). I have written a dataset format conversion script and related USD files, but I have not uploaded them yet. If needed, feel free to open an issue, and I will update them.
 
