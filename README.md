@@ -13,7 +13,7 @@ or
 ```
 Eval：
 ```
-./isaaclab.sh -p ~/IsaacLab/skrl/play.py --task Isaac-G1-AMP-Run-Walk-v0 --num_envs 32 
+./isaaclab.sh -p ~/IsaacLab/skrl/play.py --task Isaac-G1-AMP-Walk-Direct-v0 --num_envs 32 
 ```
 TensorBoard:
 ```
