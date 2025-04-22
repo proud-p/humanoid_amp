@@ -23,4 +23,6 @@ The parameters of the code in this repository have not been fine-tuned. Currentl
 
 The dataset and URDF files are from [Hugging Face](https://huggingface.co/datasets/unitreerobotics/LAFAN1_Retargeting_Dataset). 
 
+Video: [Bilibili](https://www.bilibili.com/video/BV19cRvYhEL8/?vd_source=5159ce41348cd4fd3d83ef9169dc8dbc)
+
 **Contributions**, **discussions**, and stars are all welcome! ❥(^_-)
