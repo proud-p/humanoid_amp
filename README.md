@@ -25,4 +25,6 @@ The dataset and URDF files are from [Hugging Face](https://huggingface.co/datase
 
 Video: [Bilibili](https://www.bilibili.com/video/BV19cRvYhEL8/?vd_source=5159ce41348cd4fd3d83ef9169dc8dbc)
 
+DeepWiki: [humanoid_amp](https://deepwiki.com/linden713/humanoid_amp)
+
 **Contributions**, **discussions**, and stars are all welcome! ❥(^_-)
