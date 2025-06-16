@@ -274,4 +274,6 @@ if __name__ == "__main__":
 
     print("- number of frames:", motion.num_frames)
     print("- number of DOFs:", motion.num_dofs)
+    print("- dt:", motion.dt)
+    print("- fps:", 1.0 / motion.dt)
     print("- number of bodies:", motion.num_bodies)
