@@ -35,11 +35,11 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     decimation = 2
 
     # spaces
-    observation_space =  71 + 3 * 10 #TODO
+    observation_space =  71 + 3 * 4 #TODO
     action_space = 29
     state_space = 0
-    num_amp_observations = 2
-    amp_observation_space = 71 + 3 * 10
+    num_amp_observations = 5
+    amp_observation_space = 71 + 3 * 4
 
     early_termination = True
     termination_height = 0.5
