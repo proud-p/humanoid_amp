@@ -27,7 +27,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import argparse
 from isaaclab.app import AppLauncher
-from record_data import CORRECT_JOINT_ORDER, convert_joint_order
+from record_data import MotionRecorder
 
 # Command line arguments
 parser = argparse.ArgumentParser()
@@ -53,14 +53,16 @@ motion = MotionLoader(args_cli.motion, device=args_cli.device)
 num_frames = motion.num_frames
 print(f"motion.dt: {motion.dt}")
 
-# Get original joint order and convert to correct order
-original_joint_order = motion.dof_names
-motion.dof_positions, motion.dof_velocities = convert_joint_order(
-    motion.dof_positions,
-    motion.dof_velocities,
-    original_joint_order,
-    CORRECT_JOINT_ORDER
-)
+# Find the index for the root body, typically 'pelvis'
+try:
+    print(f"Searching for 'pelvis' in the following list of body names: {motion.body_names}")
+    root_idx = motion.body_names.index('pelvis')
+    print(f"Found root body 'pelvis' at index: {root_idx}")
+except (ValueError, AttributeError):
+    print("\nError: Could not find 'pelvis' in the motion file's body_names.")
+    print("The motion replayer requires 'pelvis' to be defined as the root body.")
+    simulation_app.close()
+    sys.exit(1)
 
 # Configure simulation with dt matching motion.dt
 
@@ -115,14 +117,17 @@ sim.reset()
 scene.reset()
 
 robot = scene["robot"]
-# Align joint order
+# Align joint order from motion file to robot's joint order
 motion_dof_indices = motion.get_dof_index(robot.joint_names)
 
 # Initialize data recorder
+# We want to record the robot's state, so we pass the robot's joint names
 recorder = MotionRecorder(
-    robot, motion_dof_indices,
+    robot,
+    dof_names_to_record=robot.joint_names,
     fps=int(round(1.0 / motion.dt)),
-    device=args_cli.device)
+    device=args_cli.device
+)
 
 if args_cli.record:
     recorder.start_recording()
@@ -142,10 +147,10 @@ try:
             # Get current frame's joint and root states (aligned order!)
             joint_pos = motion.dof_positions[i, motion_dof_indices].unsqueeze(0)
             joint_vel = motion.dof_velocities[i, motion_dof_indices].unsqueeze(0)
-            root_pos = motion.body_positions[i, 0].unsqueeze(0)  # body 0 is usually pelvis
-            root_rot = motion.body_rotations[i, 0].unsqueeze(0)
-            root_vel = motion.body_linear_velocities[i, 0].unsqueeze(0)
-            root_ang_vel = motion.body_angular_velocities[i, 0].unsqueeze(0)
+            root_pos = motion.body_positions[i, root_idx].unsqueeze(0)
+            root_rot = motion.body_rotations[i, root_idx].unsqueeze(0)
+            root_vel = motion.body_linear_velocities[i, root_idx].unsqueeze(0)
+            root_ang_vel = motion.body_angular_velocities[i, root_idx].unsqueeze(0)
             root_state = torch.cat([root_pos, root_rot, root_vel, root_ang_vel], dim=-1)
 
             # Write to simulation
@@ -180,10 +185,10 @@ try:
             # Get current frame's joint and root states (aligned order!)
             joint_pos = motion.dof_positions[i, motion_dof_indices].unsqueeze(0)
             joint_vel = motion.dof_velocities[i, motion_dof_indices].unsqueeze(0)
-            root_pos = motion.body_positions[i, 0].unsqueeze(0)  # body 0 is usually pelvis
-            root_rot = motion.body_rotations[i, 0].unsqueeze(0)
-            root_vel = motion.body_linear_velocities[i, 0].unsqueeze(0)
-            root_ang_vel = motion.body_angular_velocities[i, 0].unsqueeze(0)
+            root_pos = motion.body_positions[i, root_idx].unsqueeze(0)
+            root_rot = motion.body_rotations[i, root_idx].unsqueeze(0)
+            root_vel = motion.body_linear_velocities[i, root_idx].unsqueeze(0)
+            root_ang_vel = motion.body_angular_velocities[i, root_idx].unsqueeze(0)
             root_state = torch.cat([root_pos, root_rot, root_vel, root_ang_vel], dim=-1)
 
             # Write to simulation

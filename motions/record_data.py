@@ -30,64 +30,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 
-# Define the correct joint order for G1 robot
-CORRECT_JOINT_ORDER = [
-    "left_hip_pitch_joint",
-    "left_hip_roll_joint",
-    "left_hip_yaw_joint",
-    "left_knee_joint",
-    "left_ankle_pitch_joint",
-    "left_ankle_roll_joint",
-    "right_hip_pitch_joint",
-    "right_hip_roll_joint",
-    "right_hip_yaw_joint",
-    "right_knee_joint",
-    "right_ankle_pitch_joint",
-    "right_ankle_roll_joint",
-    "waist_yaw_joint",
-    "waist_roll_joint",
-    "waist_pitch_joint",
-    "left_shoulder_pitch_joint",
-    "left_shoulder_roll_joint",
-    "left_shoulder_yaw_joint",
-    "left_elbow_joint",
-    "left_wrist_roll_joint",
-    "left_wrist_pitch_joint",
-    "left_wrist_yaw_joint",
-    "right_shoulder_pitch_joint",
-    "right_shoulder_roll_joint",
-    "right_shoulder_yaw_joint",
-    "right_elbow_joint",
-    "right_wrist_roll_joint",
-    "right_wrist_pitch_joint",
-    "right_wrist_yaw_joint"
-]
-
-def convert_joint_order(joint_positions: torch.Tensor, 
-                       joint_velocities: torch.Tensor, 
-                       from_order: List[str], 
-                       to_order: List[str]) -> tuple[torch.Tensor, torch.Tensor]:
-    """Convert joint order between different formats.
-    
-    Args:
-        joint_positions: Joint position data
-        joint_velocities: Joint velocity data
-        from_order: Original joint order
-        to_order: Target joint order
-        
-    Returns:
-        Tuple of (converted joint positions, converted joint velocities)
-    """
-    # Create mapping from original order to target order
-    order_map = {name: i for i, name in enumerate(from_order)}
-    indices = [order_map[name] for name in to_order]
-    
-    # Reorder the data
-    new_positions = joint_positions[:, indices]
-    new_velocities = joint_velocities[:, indices]
-    
-    return new_positions, new_velocities
-
 @dataclass
 class MotionData:
     fps: int
@@ -158,27 +100,35 @@ def smooth_motion_data(motion_data: MotionData, window_size: int = 3) -> MotionD
 class MotionRecorder:
     """Motion data recorder for robot movements"""
 
-    def __init__(self, robot, motion_dof_indices: np.ndarray,
+    def __init__(self, robot, dof_names_to_record: List[str],
                  fps: int = 60, device: str = "cuda", smoothing_window: int = 3):
         """
         Args:
             robot: Robot object for metadata
-            motion_dof_indices: Joint indices to record
+            dof_names_to_record: List of joint names to record.
             fps: Target frame rate (used to calculate dt)
             device: Device to use (cuda/cpu)
             smoothing_window: Window size for motion smoothing
         """
         self.robot = robot
-        self.motion_dof_indices = motion_dof_indices
         self.fps = int(fps)
         self.dt = 1.0 / self.fps
         self.device = device
         self.smoothing_window = smoothing_window
 
         # Get names directly from robot to avoid empty arrays
-        self.dof_names = np.asarray(robot.joint_names, dtype=np.str_)
+        self.dof_names = np.asarray(dof_names_to_record, dtype=np.str_)
         self.body_names = np.asarray(robot.body_names, dtype=np.str_)
 
+        try:
+            self.root_body_idx = list(robot.body_names).index('pelvis')
+        except ValueError:
+            raise ValueError("The robot asset must have a body named 'pelvis' to be used with MotionRecorder.")
+
+        # Create a mapping from the robot's full joint list to the desired recording list
+        robot_dof_map = {name: i for i, name in enumerate(robot.joint_names)}
+        self.dof_indices = np.array([robot_dof_map[name] for name in dof_names_to_record], dtype=np.int32)
+        
         self.recorded_frames: list[dict] = []
         self.is_recording = False
 
@@ -200,10 +150,10 @@ class MotionRecorder:
         dof_vel = self.robot.data.joint_vel[0].cpu().numpy()
 
         # --- Root ---
-        root_pos = self.robot.data.body_pos_w[0, 0].cpu().numpy()
-        root_rot = self.robot.data.body_quat_w[0, 0].cpu().numpy()
-        root_lin_vel = self.robot.data.body_lin_vel_w[0, 0].cpu().numpy()
-        root_ang_vel = self.robot.data.body_ang_vel_w[0, 0].cpu().numpy()
+        root_pos = self.robot.data.body_pos_w[0, self.root_body_idx].cpu().numpy()
+        root_rot = self.robot.data.body_quat_w[0, self.root_body_idx].cpu().numpy()
+        root_lin_vel = self.robot.data.body_lin_vel_w[0, self.root_body_idx].cpu().numpy()
+        root_ang_vel = self.robot.data.body_ang_vel_w[0, self.root_body_idx].cpu().numpy()
 
         # --- Full body ---
         body_pos = self.robot.data.body_pos_w[0].cpu().numpy()
@@ -214,8 +164,8 @@ class MotionRecorder:
         self.recorded_frames.append(
             dict(
                 frame_idx=frame_idx,
-                dof_positions=dof_pos[self.motion_dof_indices],
-                dof_velocities=dof_vel[self.motion_dof_indices],
+                dof_positions=dof_pos[self.dof_indices],
+                dof_velocities=dof_vel[self.dof_indices],
                 root_position=root_pos,
                 root_rotation=root_rot,
                 root_linear_velocity=root_lin_vel,
@@ -233,7 +183,7 @@ class MotionRecorder:
             return None
 
         n = len(self.recorded_frames)
-        d = len(self.motion_dof_indices)
+        d = len(self.dof_indices)
         b = len(self.body_names)
 
         # Pre-allocate arrays
