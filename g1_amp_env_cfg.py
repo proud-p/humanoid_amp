@@ -42,7 +42,7 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     observation_space =  71 + 3 * (8+5) - 6#TODO
     action_space = 29
     state_space = 0
-    num_amp_observations = 3
+    num_amp_observations = 30
     amp_observation_space = 71 + 3 * (8 + 5) - 6
 
     early_termination = True
