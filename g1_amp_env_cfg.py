@@ -29,24 +29,28 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     rew_joint_pos_limits = -0
     rew_joint_acc_l2 =-0.00
     rew_joint_vel_l2= -0.00
-
+    
+    rew_imitation_pos: float = 2.0      # 位置误差 reward scale
+    rew_imitation_rot: float = 0.5      # 朝向误差 reward scale
+    imitation_sigma_pos: float = 0.4   # exp(-d^2/σ) 的 σ
+    imitation_sigma_rot: float = 0.6
     # env
     episode_length_s = 10.0
     decimation = 2
 
     # spaces
-    observation_space =  71 + 3 * 4 #TODO
+    observation_space =  71 + 3 * (8+5) - 6#TODO
     action_space = 29
     state_space = 0
-    num_amp_observations = 5
-    amp_observation_space = 71 + 3 * 4
+    num_amp_observations = 3
+    amp_observation_space = 71 + 3 * (8 + 5) - 6
 
     early_termination = True
     termination_height = 0.5
 
     motion_file: str = MISSING
     reference_body = "pelvis"
-    reset_strategy = "random"  # default, random, random-start
+    reset_strategy = "default"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
 
     * default: pose and joint states are set to the initial state of the asset.

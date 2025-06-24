@@ -39,31 +39,30 @@ class G1AmpEnv(DirectRLEnv):
         self._motion_loader = MotionLoader(motion_file=self.cfg.motion_file, device=self.device)
 
         # DOF and key body indexes  
-        key_body_names = [             
-            "right_rubber_hand",
-            "left_rubber_hand",
-            "right_ankle_roll_link",
-            "left_ankle_roll_link"]
-        # key_body_names = [ 
-        #     "torso_link",
-
-        #     "left_shoulder_yaw_link",
-        #     "right_shoulder_yaw_link",
-
-        #     "left_elbow_link",
-        #     "right_elbow_link",
-            
+        # key_body_names = [             
         #     "right_rubber_hand",
         #     "left_rubber_hand",
-            
-        #     "right_hip_yaw_link",
-        #     "left_hip_yaw_link",
-            
-        #     "right_knee_link",
-        #     "left_knee_link",
-
         #     "right_ankle_roll_link",
         #     "left_ankle_roll_link"]
+        key_body_names = [ 
+
+            "left_shoulder_yaw_link",
+            "right_shoulder_yaw_link",
+
+            "left_elbow_link",
+            "right_elbow_link",
+            
+            "right_rubber_hand",
+            "left_rubber_hand",
+
+            "right_ankle_roll_link",
+            "left_ankle_roll_link",
+            
+            "torso_link",
+            "right_hip_yaw_link",
+            "left_hip_yaw_link",
+            "right_knee_link",
+            "left_knee_link",]
 
         self.ref_body_index = self.robot.data.body_names.index(self.cfg.reference_body)
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
@@ -102,6 +101,7 @@ class G1AmpEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
+        self.actions += torch.randn_like(self.actions)*0.02
         # self.pre_actions = actions.clone()
 
     def _apply_action(self):
@@ -116,8 +116,8 @@ class G1AmpEnv(DirectRLEnv):
             self.robot.data.joint_vel,
             self.robot.data.body_pos_w[:, self.ref_body_index],
             self.robot.data.body_quat_w[:, self.ref_body_index],
-            self.robot.data.body_lin_vel_w[:, self.ref_body_index],
-            self.robot.data.body_ang_vel_w[:, self.ref_body_index],
+            # self.robot.data.body_lin_vel_w[:, self.ref_body_index],
+            # self.robot.data.body_ang_vel_w[:, self.ref_body_index],
             self.robot.data.body_pos_w[:, self.key_body_indexes],
         )
 
@@ -132,22 +132,53 @@ class G1AmpEnv(DirectRLEnv):
 
     # def _get_rewards(self) -> torch.Tensor:
     #     return torch.ones((self.num_envs,), dtype=torch.float32, device=self.sim.device)
+    # def _get_rewards(self) -> torch.Tensor:
+    #     total_reward, reward_log = compute_rewards(
+    #         self.cfg.rew_termination,
+    #         self.cfg.rew_action_l2,
+    #         self.cfg.rew_joint_pos_limits,
+    #         self.cfg.rew_joint_acc_l2,
+    #         self.cfg.rew_joint_vel_l2,
+    #         self.reset_terminated,
+    #         self.actions,
+    #         self.robot.data.joint_pos,
+    #         self.robot.data.soft_joint_pos_limits,
+    #         self.robot.data.joint_acc,
+    #         self.robot.data.joint_vel,    
+    #     )
+    #     self.extras["log"] = reward_log
+    #     return total_reward
     def _get_rewards(self) -> torch.Tensor:
-        total_reward, reward_log = compute_rewards(
-            self.cfg.rew_termination,
-            self.cfg.rew_action_l2,
-            self.cfg.rew_joint_pos_limits,
-            self.cfg.rew_joint_acc_l2,
-            self.cfg.rew_joint_vel_l2,
-            self.reset_terminated,
-            self.actions,
-            self.robot.data.joint_pos,
-            self.robot.data.soft_joint_pos_limits,
-            self.robot.data.joint_acc,
-            self.robot.data.joint_vel,    
+        # ================= imitation reward ==========================
+        with torch.no_grad():
+            ref_obs = self.collect_reference_motions(
+                num_samples=self.num_envs,
+                current_times = (self.episode_length_buf * self.physics_dt).cpu().numpy()
+            )                                    # [B, amp_obs_size]
+
+        ref_obs = ref_obs.view(self.num_envs,
+                            self.cfg.num_amp_observations,
+                            self.cfg.amp_observation_space)[:, 0]
+        ref_key_pos = ref_obs[:, -3 * len(self.key_body_indexes):]\
+                        .view(self.num_envs, len(self.key_body_indexes), 3)
+        ref_root_quat = ref_obs[:, 3:7]
+
+        imitation_reward = compute_imitation_reward(
+            agent_key_pos=self.robot.data.body_pos_w[:, self.key_body_indexes],
+            agent_root_quat=self.robot.data.body_quat_w[:, self.ref_body_index],
+            ref_key_pos=ref_key_pos,
+            ref_root_quat=ref_root_quat,
+            key_pos_scale=self.cfg.rew_imitation_pos,
+            root_rot_scale=self.cfg.rew_imitation_rot,
+            sigma_pos=self.cfg.imitation_sigma_pos,
+            sigma_rot=self.cfg.imitation_sigma_rot,
         )
-        self.extras["log"] = reward_log
-        return total_reward
+
+        # ============== 返回 & 日志 ================================
+        self.extras["log"] = {"rew_imitation": imitation_reward.mean()}
+        return imitation_reward
+
+
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -204,7 +235,7 @@ class G1AmpEnv(DirectRLEnv):
         motion_torso_index = self._motion_loader.get_body_index(["pelvis"])[0]
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, 0:3] = body_positions[:, motion_torso_index] + self.scene.env_origins[env_ids]
-        root_state[:, 2] += 0.1  # lift the humanoid slightly to avoid collisions with the ground
+        root_state[:, 2] += 0.05  # lift the humanoid slightly to avoid collisions with the ground
         root_state[:, 3:7] = body_rotations[:, motion_torso_index]
         root_state[:, 7:10] = body_linear_velocities[:, motion_torso_index]
         root_state[:, 10:13] = body_angular_velocities[:, motion_torso_index]
@@ -243,8 +274,8 @@ class G1AmpEnv(DirectRLEnv):
             dof_velocities[:, self.motion_dof_indexes],
             body_positions[:, self.motion_ref_body_index],
             body_rotations[:, self.motion_ref_body_index],
-            body_linear_velocities[:, self.motion_ref_body_index],
-            body_angular_velocities[:, self.motion_ref_body_index],
+            # body_linear_velocities[:, self.motion_ref_body_index],
+            # body_angular_velocities[:, self.motion_ref_body_index],
             body_positions[:, self.motion_key_body_indexes],
         )
         return amp_observation.view(-1, self.amp_observation_size)
@@ -267,8 +298,8 @@ def compute_obs(
     dof_velocities: torch.Tensor,
     root_positions: torch.Tensor,
     root_rotations: torch.Tensor,
-    root_linear_velocities: torch.Tensor,
-    root_angular_velocities: torch.Tensor,
+    # root_linear_velocities: torch.Tensor,
+    # root_angular_velocities: torch.Tensor,
     key_body_positions: torch.Tensor,
 ) -> torch.Tensor:
     obs = torch.cat(
@@ -277,13 +308,36 @@ def compute_obs(
             dof_velocities,
             root_positions[:, 2:3],  # root body height
             quaternion_to_tangent_and_normal(root_rotations),
-            root_linear_velocities,
-            root_angular_velocities,
+            # root_linear_velocities,
+            # root_angular_velocities,
             (key_body_positions - root_positions.unsqueeze(-2)).view(key_body_positions.shape[0], -1),
         ),
         dim=-1,
     )
     return obs
+
+@torch.jit.script
+def compute_imitation_reward(
+    agent_key_pos: torch.Tensor,          # [B, K, 3]
+    agent_root_quat: torch.Tensor,        # [B, 4]
+    ref_key_pos: torch.Tensor,            # [B, K, 3]
+    ref_root_quat: torch.Tensor,          # [B, 4]
+    key_pos_scale: float,
+    root_rot_scale: float,
+    sigma_pos: float,
+    sigma_rot: float,
+) -> torch.Tensor:
+    # 关键点位置误差
+    pos_err = torch.square(agent_key_pos - ref_key_pos).sum(dim=-1).mean(dim=-1)
+    rew_pos = key_pos_scale * torch.exp(-pos_err / (sigma_pos ** 2))
+
+    # 根朝向误差（四元数 -> 角度）
+    quat_dot = torch.abs(torch.sum(agent_root_quat * ref_root_quat, dim=-1))  # |q⋅q_ref|
+    ang_err = 2 * torch.arccos(torch.clamp(quat_dot, -1.0, 1.0))
+    rew_rot = root_rot_scale * torch.exp(-torch.square(ang_err) / (sigma_rot ** 2))
+
+    return rew_pos + rew_rot
+
 @torch.jit.script
 def compute_rewards(
     rew_scale_termination: float,

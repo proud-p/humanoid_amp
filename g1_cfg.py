@@ -15,14 +15,14 @@ G1_CFG = ArticulationCfg(
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 disable_gravity=False,
                 retain_accelerations=False,
-                linear_damping=0.0,
-                angular_damping=0.0,
-                max_linear_velocity=3.0,
-                max_angular_velocity=3.0,
+                linear_damping=0.05,
+                angular_damping=0.05,
+                max_linear_velocity=5.0,
+                max_angular_velocity=5.0,
                 max_depenetration_velocity=10.0,
             ),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+                enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=1
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
@@ -31,7 +31,6 @@ G1_CFG = ArticulationCfg(
                 ".*_hip_pitch_joint": -0.20,
                 ".*_knee_joint": 0.42,
                 ".*_ankle_pitch_joint": -0.23,
-                # ".*_elbow_pitch_joint": 0.87,
                 "left_shoulder_roll_joint": 0.16,
                 "left_shoulder_pitch_joint": 0.35,
                 "right_shoulder_roll_joint": -0.16,
@@ -97,7 +96,7 @@ G1_CFG = ArticulationCfg(
                 ],
                 effort_limit=300,
                 velocity_limit=100.0,
-                stiffness=40.0,
+                stiffness=100.0,
                 damping=10.0,
                 armature={
                     ".*_shoulder_.*": 0.01,
