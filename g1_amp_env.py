@@ -163,7 +163,7 @@ class G1AmpEnv(DirectRLEnv):
                         .view(self.num_envs, len(self.key_body_indexes), 3)
         ref_root_quat = ref_obs[:, 3:7]
 
-        imitation_reward = compute_imitation_reward(
+        imitation_pos_rot_reward = compute_imitation_reward(
             agent_key_pos=self.robot.data.body_pos_w[:, self.key_body_indexes],
             agent_root_quat=self.robot.data.body_quat_w[:, self.ref_body_index],
             ref_key_pos=ref_key_pos,
@@ -174,8 +174,34 @@ class G1AmpEnv(DirectRLEnv):
             sigma_rot=self.cfg.imitation_sigma_rot,
         )
 
+        # ================= 速度模仿奖励 ==========================
+        # 获取参考关键点线速度（与 ref_obs 不同，需要再次采样）
+        (
+            _dof_p,
+            _dof_v,
+            _body_p,
+            _body_r,
+            body_lin_velocities,
+            _body_ang_vel,
+        ) = self._motion_loader.sample(num_samples=self.num_envs, times=(self.episode_length_buf * self.physics_dt).cpu().numpy())
+
+        ref_key_vel = body_lin_velocities[:, self.motion_key_body_indexes]
+
+        imitation_vel_reward = compute_imitation_velocity_reward(
+            agent_key_vel=self.robot.data.body_lin_vel_w[:, self.key_body_indexes],
+            ref_key_vel=ref_key_vel,
+            vel_scale=self.cfg.rew_imitation_vel,
+            sigma_vel=self.cfg.imitation_sigma_vel,
+        )
+
+        imitation_reward = imitation_pos_rot_reward + imitation_vel_reward
+
         # ============== 返回 & 日志 ================================
-        self.extras["log"] = {"rew_imitation": imitation_reward.mean()}
+        self.extras["log"] = {
+            "rew_imitation_pos_rot": imitation_pos_rot_reward.mean(),
+            "rew_imitation_vel": imitation_vel_reward.mean(),
+            "rew_imitation_total": imitation_reward.mean(),
+        }
         return imitation_reward
 
 
@@ -337,6 +363,17 @@ def compute_imitation_reward(
     rew_rot = root_rot_scale * torch.exp(-torch.square(ang_err) / (sigma_rot ** 2))
 
     return rew_pos + rew_rot
+
+@torch.jit.script
+def compute_imitation_velocity_reward(
+    agent_key_vel: torch.Tensor,          # [B, K, 3]
+    ref_key_vel: torch.Tensor,            # [B, K, 3]
+    vel_scale: float,
+    sigma_vel: float,
+) -> torch.Tensor:
+    """根据关键点线速度误差计算奖励。"""
+    vel_err = torch.square(agent_key_vel - ref_key_vel).sum(dim=-1).mean(dim=-1)
+    return vel_scale * torch.exp(-vel_err / (sigma_vel ** 2))
 
 @torch.jit.script
 def compute_rewards(

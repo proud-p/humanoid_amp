@@ -30,10 +30,15 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     rew_joint_acc_l2 =-0.00
     rew_joint_vel_l2= -0.00
     
-    rew_imitation_pos: float = 2.0      # 位置误差 reward scale
-    rew_imitation_rot: float = 0.5      # 朝向误差 reward scale
-    imitation_sigma_pos: float = 0.4   # exp(-d^2/σ) 的 σ
-    imitation_sigma_rot: float = 0.6
+    # imitation reward scales
+    rew_imitation_pos: float = 5.0      # 关键点位置模仿奖励尺度
+    rew_imitation_rot: float = 1.5      # 根朝向模仿奖励尺度
+    rew_imitation_vel: float = 0.5      # 关键点速度模仿奖励尺度
+
+    # imitation reward fall-off parameters (σ)
+    imitation_sigma_pos: float = 0.25   # 位置误差 σ
+    imitation_sigma_rot: float = 0.4    # 朝向误差 σ
+    imitation_sigma_vel: float = 0.5    # 速度误差 σ
     # env
     episode_length_s = 10.0
     decimation = 2
