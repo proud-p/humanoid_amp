@@ -70,7 +70,16 @@ class G1AmpEnv(DirectRLEnv):
         self.motion_dof_indexes = self._motion_loader.get_dof_index(self.robot.data.joint_names)
         self.motion_ref_body_index = self._motion_loader.get_body_index([self.cfg.reference_body])[0]
         self.motion_key_body_indexes = self._motion_loader.get_body_index(key_body_names)
-
+        print(f"Reference body index: {self.ref_body_index}")
+        print(f"Key body indexes: {self.key_body_indexes}")
+        print(f"Motion DOF indexes: {self.motion_dof_indexes}")
+        print(f"Motion reference body index: {self.motion_ref_body_index}")
+        print(f"Motion key body indexes: {self.motion_key_body_indexes}")
+# Reference body index: 0
+# Key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
+# Motion DOF indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+# Motion reference body index: 0
+# Motion key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
         # reconfigure AMP observation space according to the number of observations and create the buffer
         self.amp_observation_size = self.cfg.num_amp_observations * self.cfg.amp_observation_space
         self.amp_observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.amp_observation_size,))
@@ -110,17 +119,23 @@ class G1AmpEnv(DirectRLEnv):
         self.robot.set_joint_position_target(target)
 
     def _get_observations(self) -> dict:
-        # build task observation
+        # 计算 progress: 当前 episode 步数 / 最大步数，形状 [num_envs, 1]
+        progress = (self.episode_length_buf.squeeze(-1).float() / (self.max_episode_length - 1)).unsqueeze(-1)
+        # 转换为相对坐标，与参考动作观测保持一致
+        root_pos_relative = self.robot.data.body_pos_w[:, self.ref_body_index] - self.scene.env_origins
+        key_body_pos_relative = self.robot.data.body_pos_w[:, self.key_body_indexes] - self.scene.env_origins.unsqueeze(1)
         obs = compute_obs(
             self.robot.data.joint_pos,
             self.robot.data.joint_vel,
-            self.robot.data.body_pos_w[:, self.ref_body_index],
+            root_pos_relative,
             self.robot.data.body_quat_w[:, self.ref_body_index],
             # self.robot.data.body_lin_vel_w[:, self.ref_body_index],
             # self.robot.data.body_ang_vel_w[:, self.ref_body_index],
-            self.robot.data.body_pos_w[:, self.key_body_indexes],
+            key_body_pos_relative,
+            progress,
         )
-
+        # print(self.scene.env_origins)
+        # print(key_body_pos_relative)
         # update AMP observation history
         for i in reversed(range(self.cfg.num_amp_observations - 1)):
             self.amp_observation_buffer[:, i + 1] = self.amp_observation_buffer[:, i]
@@ -130,79 +145,114 @@ class G1AmpEnv(DirectRLEnv):
 
         return {"policy": obs}
 
-    # def _get_rewards(self) -> torch.Tensor:
-    #     return torch.ones((self.num_envs,), dtype=torch.float32, device=self.sim.device)
-    # def _get_rewards(self) -> torch.Tensor:
-    #     total_reward, reward_log = compute_rewards(
-    #         self.cfg.rew_termination,
-    #         self.cfg.rew_action_l2,
-    #         self.cfg.rew_joint_pos_limits,
-    #         self.cfg.rew_joint_acc_l2,
-    #         self.cfg.rew_joint_vel_l2,
-    #         self.reset_terminated,
-    #         self.actions,
-    #         self.robot.data.joint_pos,
-    #         self.robot.data.soft_joint_pos_limits,
-    #         self.robot.data.joint_acc,
-    #         self.robot.data.joint_vel,    
-    #     )
-    #     self.extras["log"] = reward_log
-    #     return total_reward
     def _get_rewards(self) -> torch.Tensor:
         # ================= imitation reward ==========================
         with torch.no_grad():
-            ref_obs = self.collect_reference_motions(
-                num_samples=self.num_envs,
-                current_times = (self.episode_length_buf * self.physics_dt).cpu().numpy()
-            )                                    # [B, amp_obs_size]
+            # 获取当前时间的参考动作
+            current_times = (self.episode_length_buf * self.physics_dt).cpu().numpy()
+            # 采样参考动作数据
+            (
+                ref_dof_positions,
+                ref_dof_velocities,
+                ref_body_positions,
+                ref_body_rotations,
+                _,
+                _,
+            ) = self._motion_loader.sample(num_samples=self.num_envs, times=current_times)
+        # Reference DOF positions shape: torch.Size([4096, 29])
+        # Reference DOF velocities shape: torch.Size([4096, 29])
+        # Reference body positions shape: torch.Size([4096, 39, 3])
+        # Reference body rotations shape: torch.Size([4096, 39, 4])
+        
+        # Key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
+        # Motion DOF indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+        # Motion reference body index: 0
+        # Motion key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
+            # 获取参考关节角度和速度
+            ref_joint_pos = ref_dof_positions[:, self.motion_dof_indexes]
+            ref_joint_vel = ref_dof_velocities[:, self.motion_dof_indexes]
+            
+            # 获取参考关键点位置和根朝向
+            ref_root_pos = ref_body_positions[:, self.motion_ref_body_index]  # 使用根位置
+            ref_root_quat = ref_body_rotations[:, self.motion_ref_body_index]
 
-        ref_obs = ref_obs.view(self.num_envs,
-                            self.cfg.num_amp_observations,
-                            self.cfg.amp_observation_space)[:, 0]
-        ref_key_pos = ref_obs[:, -3 * len(self.key_body_indexes):]\
-                        .view(self.num_envs, len(self.key_body_indexes), 3)
-        ref_root_quat = ref_obs[:, 3:7]
+        # 1. 关节角度 imitation reward
+        joint_pos_error = torch.square(self.robot.data.joint_pos - ref_joint_pos).sum(dim=-1)
+        rew_joint_pos = self.cfg.rew_imitation_joint_pos * torch.exp(-joint_pos_error / (self.cfg.imitation_sigma_joint_pos ** 2))
+        
+        # 2. 关节速度 imitation reward  
+        joint_vel_error = torch.square(self.robot.data.joint_vel - ref_joint_vel).sum(dim=-1)
+        rew_joint_vel = self.cfg.rew_imitation_joint_vel * torch.exp(-joint_vel_error / (self.cfg.imitation_sigma_joint_vel ** 2))
+        
+        # 3. 根位置 imitation reward
+        # 将机器人当前位置转换为相对于环境原点的位置，与参考位置对比
+        current_relative_pos = self.robot.data.body_pos_w[:, self.ref_body_index] - self.scene.env_origins
+        pos_err = torch.square(current_relative_pos - ref_root_pos).sum(dim=-1)
+        rew_pos = self.cfg.rew_imitation_pos * torch.exp(-pos_err / (self.cfg.imitation_sigma_pos ** 2))
+        
+        # 4. 根朝向 imitation reward
+        quat_dot = torch.abs(torch.sum(self.robot.data.body_quat_w[:, self.ref_body_index] * ref_root_quat, dim=-1))
+        ang_err = 2 * torch.arccos(torch.clamp(quat_dot, -1.0, 1.0))
+        rew_rot = self.cfg.rew_imitation_rot * torch.exp(-torch.square(ang_err) / (self.cfg.imitation_sigma_rot ** 2))
+        
+        # 5. 总 imitation reward
+        imitation_reward = rew_joint_pos + rew_joint_vel + rew_pos + rew_rot
 
-        imitation_pos_rot_reward = compute_imitation_reward(
-            agent_key_pos=self.robot.data.body_pos_w[:, self.key_body_indexes],
-            agent_root_quat=self.robot.data.body_quat_w[:, self.ref_body_index],
-            ref_key_pos=ref_key_pos,
-            ref_root_quat=ref_root_quat,
-            key_pos_scale=self.cfg.rew_imitation_pos,
-            root_rot_scale=self.cfg.rew_imitation_rot,
-            sigma_pos=self.cfg.imitation_sigma_pos,
-            sigma_rot=self.cfg.imitation_sigma_rot,
+        # ================= 基础奖励 (调用原有的 compute_rewards 函数) ==========================
+        basic_reward, basic_reward_log = compute_rewards(
+            self.cfg.rew_termination,
+            self.cfg.rew_action_l2,
+            self.cfg.rew_joint_pos_limits,
+            self.cfg.rew_joint_acc_l2,
+            self.cfg.rew_joint_vel_l2,
+            self.reset_terminated,
+            self.actions,
+            self.robot.data.joint_pos,
+            self.robot.data.soft_joint_pos_limits,
+            self.robot.data.joint_acc,
+            self.robot.data.joint_vel,    
         )
 
-        # ================= 速度模仿奖励 ==========================
-        # 获取参考关键点线速度（与 ref_obs 不同，需要再次采样）
-        (
-            _dof_p,
-            _dof_v,
-            _body_p,
-            _body_r,
-            body_lin_velocities,
-            _body_ang_vel,
-        ) = self._motion_loader.sample(num_samples=self.num_envs, times=(self.episode_length_buf * self.physics_dt).cpu().numpy())
+        # ================= 总奖励 ==========================
+        total_reward = imitation_reward + basic_reward
 
-        ref_key_vel = body_lin_velocities[:, self.motion_key_body_indexes]
-
-        imitation_vel_reward = compute_imitation_velocity_reward(
-            agent_key_vel=self.robot.data.body_lin_vel_w[:, self.key_body_indexes],
-            ref_key_vel=ref_key_vel,
-            vel_scale=self.cfg.rew_imitation_vel,
-            sigma_vel=self.cfg.imitation_sigma_vel,
-        )
-
-        imitation_reward = imitation_pos_rot_reward + imitation_vel_reward
-
-        # ============== 返回 & 日志 ================================
-        self.extras["log"] = {
-            "rew_imitation_pos_rot": imitation_pos_rot_reward.mean(),
-            "rew_imitation_vel": imitation_vel_reward.mean(),
-            "rew_imitation_total": imitation_reward.mean(),
+        # ============== 日志记录 ================================
+        # 使用类型忽略来避免linter错误，这是框架的正常用法
+        log_dict = {
+            # 模仿学习奖励
+            "rew_imitation": imitation_reward.mean().item(),
+            "rew_joint_pos": rew_joint_pos.mean().item(),
+            "rew_joint_vel": rew_joint_vel.mean().item(),
+            "rew_pos": rew_pos.mean().item(),
+            "rew_rot": rew_rot.mean().item(),
+            "error_joint_pos": joint_pos_error.mean().item(),
+            "error_joint_vel": joint_vel_error.mean().item(),
+            "error_root_pos": pos_err.mean().item(),
+            "error_ang": ang_err.mean().item(),
+            "total_reward": total_reward.mean().item(),
         }
-        return imitation_reward
+        
+        # 添加基础奖励日志
+        for key, value in basic_reward_log.items():
+            if isinstance(value, torch.Tensor):
+                log_dict[key] = value.mean().item()
+            else:
+                log_dict[key] = float(value)
+        
+        # 更新extras - 使用类型忽略避免linter错误
+        self.extras["log"] = log_dict  # type: ignore
+        
+        # 直接记录到TensorBoard（如果agent可用）
+        if hasattr(self, '_skrl_agent') and getattr(self, '_skrl_agent', None) is not None:
+            try:
+                agent = getattr(self, '_skrl_agent')
+                for k, v in log_dict.items():
+                    agent.track_data(f"Reward / {k}", v)
+            except Exception:
+                # 静默处理任何错误，避免影响训练
+                pass
+                
+        return total_reward
 
 
 
@@ -343,39 +393,6 @@ def compute_obs(
     return obs
 
 @torch.jit.script
-def compute_imitation_reward(
-    agent_key_pos: torch.Tensor,          # [B, K, 3]
-    agent_root_quat: torch.Tensor,        # [B, 4]
-    ref_key_pos: torch.Tensor,            # [B, K, 3]
-    ref_root_quat: torch.Tensor,          # [B, 4]
-    key_pos_scale: float,
-    root_rot_scale: float,
-    sigma_pos: float,
-    sigma_rot: float,
-) -> torch.Tensor:
-    # 关键点位置误差
-    pos_err = torch.square(agent_key_pos - ref_key_pos).sum(dim=-1).mean(dim=-1)
-    rew_pos = key_pos_scale * torch.exp(-pos_err / (sigma_pos ** 2))
-
-    # 根朝向误差（四元数 -> 角度）
-    quat_dot = torch.abs(torch.sum(agent_root_quat * ref_root_quat, dim=-1))  # |q⋅q_ref|
-    ang_err = 2 * torch.arccos(torch.clamp(quat_dot, -1.0, 1.0))
-    rew_rot = root_rot_scale * torch.exp(-torch.square(ang_err) / (sigma_rot ** 2))
-
-    return rew_pos + rew_rot
-
-@torch.jit.script
-def compute_imitation_velocity_reward(
-    agent_key_vel: torch.Tensor,          # [B, K, 3]
-    ref_key_vel: torch.Tensor,            # [B, K, 3]
-    vel_scale: float,
-    sigma_vel: float,
-) -> torch.Tensor:
-    """根据关键点线速度误差计算奖励。"""
-    vel_err = torch.square(agent_key_vel - ref_key_vel).sum(dim=-1).mean(dim=-1)
-    return vel_scale * torch.exp(-vel_err / (sigma_vel ** 2))
-
-@torch.jit.script
 def compute_rewards(
     rew_scale_termination: float,
     rew_scale_action_l2: float,
@@ -401,10 +418,10 @@ def compute_rewards(
     total_reward = rew_termination + rew_action_l2 + rew_joint_pos_limits + rew_joint_acc_l2 + rew_joint_vel_l2
     
     log = {
-        "rew_termination": (rew_termination).mean(),
-        "rew_action_l2": (rew_action_l2).mean(),
-        "rew_joint_pos_limits": (rew_joint_pos_limits).mean(),
-        "rew_joint_acc_l2": (rew_joint_acc_l2).mean(),
-        "rew_joint_vel_l2": (rew_joint_vel_l2).mean(),
+        "pub_termination": (rew_termination).mean(),
+        "pub_action_l2": (rew_action_l2).mean(),
+        "pub_joint_pos_limits": (rew_joint_pos_limits).mean(),
+        "pub_joint_acc_l2": (rew_joint_acc_l2).mean(),
+        "pub_joint_vel_l2": (rew_joint_vel_l2).mean(),
         }
     return total_reward, log

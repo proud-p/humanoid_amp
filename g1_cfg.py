@@ -17,8 +17,8 @@ G1_CFG = ArticulationCfg(
                 retain_accelerations=False,
                 linear_damping=0.05,
                 angular_damping=0.05,
-                max_linear_velocity=5.0,
-                max_angular_velocity=5.0,
+                max_linear_velocity=3.0,
+                max_angular_velocity=3.0,
                 max_depenetration_velocity=10.0,
             ),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
@@ -96,7 +96,7 @@ G1_CFG = ArticulationCfg(
                 ],
                 effort_limit=300,
                 velocity_limit=100.0,
-                stiffness=100.0,
+                stiffness=40.0,
                 damping=10.0,
                 armature={
                     ".*_shoulder_.*": 0.01,
