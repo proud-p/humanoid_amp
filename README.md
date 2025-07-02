@@ -44,7 +44,7 @@ The usage of some helper script functions is explained at the beginning of the f
 If you're still looking for the dataset, a third-party mirror is currently available here:  
 [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
 
-*Use at your own discretion, as it is not officially maintained. qwq*
+Or you can also use the data from [AMASS](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
 ## TODO
 
 - ✅ Current: Dancing motion is working
