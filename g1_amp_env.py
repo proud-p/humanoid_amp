@@ -75,11 +75,11 @@ class G1AmpEnv(DirectRLEnv):
         print(f"Motion DOF indexes: {self.motion_dof_indexes}")
         print(f"Motion reference body index: {self.motion_ref_body_index}")
         print(f"Motion key body indexes: {self.motion_key_body_indexes}")
-# Reference body index: 0
-# Key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
-# Motion DOF indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
-# Motion reference body index: 0
-# Motion key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
+        # Reference body index: 0
+        # Key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
+        # Motion DOF indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+        # Motion reference body index: 0
+        # Motion key body indexes: [27, 28, 29, 30, 38, 37, 26, 25, 11, 10, 9, 13, 12]
         # reconfigure AMP observation space according to the number of observations and create the buffer
         self.amp_observation_size = self.cfg.num_amp_observations * self.cfg.amp_observation_space
         self.amp_observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.amp_observation_size,))
@@ -110,7 +110,7 @@ class G1AmpEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
-        self.actions += torch.randn_like(self.actions)*0.02
+        # self.actions += torch.randn_like(self.actions)*0.02
         # self.pre_actions = actions.clone()
 
     def _apply_action(self):
@@ -172,8 +172,8 @@ class G1AmpEnv(DirectRLEnv):
             ref_joint_pos = ref_dof_positions[:, self.motion_dof_indexes]
             ref_joint_vel = ref_dof_velocities[:, self.motion_dof_indexes]
             
-            # 获取参考关键点位置和根朝向
-            ref_root_pos = ref_body_positions[:, self.motion_ref_body_index]  # 使用根位置
+            # 获取body点位置和根朝向
+            ref_root_pos = ref_body_positions[:, self.motion_ref_body_index]  
             ref_root_quat = ref_body_rotations[:, self.motion_ref_body_index]
 
         # 1. 关节角度 imitation reward
@@ -345,6 +345,9 @@ class G1AmpEnv(DirectRLEnv):
             body_angular_velocities,
         ) = self._motion_loader.sample(num_samples=num_samples, times=times)
         # compute AMP observation
+        # 计算参考 progress
+        progress = torch.as_tensor(times, device=dof_positions.device, dtype=dof_positions.dtype).unsqueeze(-1) / self._motion_loader.duration
+
         amp_observation = compute_obs(
             dof_positions[:, self.motion_dof_indexes],
             dof_velocities[:, self.motion_dof_indexes],
@@ -353,6 +356,7 @@ class G1AmpEnv(DirectRLEnv):
             # body_linear_velocities[:, self.motion_ref_body_index],
             # body_angular_velocities[:, self.motion_ref_body_index],
             body_positions[:, self.motion_key_body_indexes],
+            progress,
         )
         return amp_observation.view(-1, self.amp_observation_size)
 
@@ -377,6 +381,7 @@ def compute_obs(
     # root_linear_velocities: torch.Tensor,
     # root_angular_velocities: torch.Tensor,
     key_body_positions: torch.Tensor,
+    progress: torch.Tensor,
 ) -> torch.Tensor:
     obs = torch.cat(
         (
@@ -387,6 +392,7 @@ def compute_obs(
             # root_linear_velocities,
             # root_angular_velocities,
             (key_body_positions - root_positions.unsqueeze(-2)).view(key_body_positions.shape[0], -1),
+            progress,
         ),
         dim=-1,
     )

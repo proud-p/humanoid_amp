@@ -24,38 +24,49 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     """Humanoid AMP environment config (base class)."""
     
     # reward
-    rew_termination = -0.0              # 终止惩罚，避免早期死亡
-    rew_action_l2 = -0.005              # 动作惩罚，稍微减小
-    rew_joint_pos_limits = -0.1         # 关节限制惩罚，加大避免违规
-    rew_joint_acc_l2 = -0.000001          # 关节加速度惩罚，鼓励平滑动作
-    rew_joint_vel_l2 = -0.001           # 关节速度惩罚，稍微减小
-    
+    # rew_termination = -0.0              # 终止惩罚，避免早期死亡
+    # rew_action_l2 = -5              # 动作惩罚，稍微减小
+    # rew_joint_pos_limits = -1         # 关节限制惩罚，加大避免违规
+    # rew_joint_acc_l2 = -0.000001          # 关节加速度惩罚，鼓励平滑动作
+    # rew_joint_vel_l2 = -0.005           # 关节速度惩罚，稍微减小
+    rew_termination = -0.0
+    rew_action_l2 = -0.005
+    rew_joint_pos_limits = -0.1
+    rew_joint_acc_l2 = -1.0e-06
+    rew_joint_vel_l2 = -0.001
     # imitation reward parameters
     rew_imitation_pos: float = 1.0       # 位置误差奖励：重要，整体轨迹
-    rew_imitation_rot: float = 2.0       # 朝向误差奖励：很重要，身体姿态
-    rew_imitation_joint_pos: float = 2.5 # 关节角度奖励：重要但不过度严格
-    rew_imitation_joint_vel: float = 2.0 # 关节速度奖励：很重要，保证流畅性
-    imitation_sigma_pos: float = 0.8     # 位置sigma：适度宽松
-    imitation_sigma_rot: float = 1.0     # 朝向sigma：适度严格
-    imitation_sigma_joint_pos: float = 1.2 # 关节角度sigma：宽松，允许自然变化
-    imitation_sigma_joint_vel: float = 2.0 # 关节速度sigma：宽松，鼓励流畅
+    rew_imitation_rot: float = 2.0
+    rew_imitation_joint_pos: float = 2.5
+    rew_imitation_joint_vel: float = 2.0
+    imitation_sigma_pos: float = 0.8
+    imitation_sigma_rot: float = 1.0
+    imitation_sigma_joint_pos: float = 1.2
+    imitation_sigma_joint_vel: float = 2.0
+    # rew_imitation_rot: float = 1.0       # 朝向误差奖励：很重要，身体姿态
+    # rew_imitation_joint_pos: float = 1. # 关节角度奖励：重要但不过度严格
+    # rew_imitation_joint_vel: float = 1.0 # 关节速度奖励：很重要，保证流畅性
+    # imitation_sigma_pos: float = 2     # 位置sigma：适度宽松
+    # imitation_sigma_rot: float = 5.0     # 朝向sigma：适度严格
+    # imitation_sigma_joint_pos: float = 5 # 关节角度sigma：宽松，允许自然变化
+    # imitation_sigma_joint_vel: float = 12 # 关节速度sigma：宽松，鼓励流畅
     # env
     episode_length_s = 10.0
-    decimation = 2
+    decimation = 1
 
     # spaces
-    observation_space =  71 + 3 * (8+5) - 6#TODO
+    observation_space =  71 + 3 * (8+5) - 6 + 1  # 加入 progress 特征
     action_space = 29
     state_space = 0
-    num_amp_observations = 30
-    amp_observation_space = 71 + 3 * (8 + 5) - 6
+    num_amp_observations = 3
+    amp_observation_space = 71 + 3 * (8 + 5) - 6 + 1
 
     early_termination = True
     termination_height = 0.5
 
     motion_file: str = MISSING
     reference_body = "pelvis"
-    reset_strategy = "default"  # default, random, random-start
+    reset_strategy = "random-start"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
 
     * default: pose and joint states are set to the initial state of the asset.
