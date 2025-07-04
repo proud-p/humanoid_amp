@@ -178,17 +178,20 @@ class G1AmpEnv(DirectRLEnv):
 
         # 1. 关节角度 imitation reward
         joint_pos_error = torch.square(self.robot.data.joint_pos - ref_joint_pos).sum(dim=-1)
-        rew_joint_pos = self.cfg.rew_imitation_joint_pos * torch.exp(-joint_pos_error / (self.cfg.imitation_sigma_joint_pos ** 2))
+        rew_joint_pos = exp_reward_with_floor(joint_pos_error, self.cfg.rew_imitation_joint_pos, self.cfg.imitation_sigma_joint_pos, floor=4.0)
+        rew_joint_pos = torch.clamp(rew_joint_pos, min=-1.0)  # 避免关节位置过度惩罚
         
         # 2. 关节速度 imitation reward  
         joint_vel_error = torch.square(self.robot.data.joint_vel - ref_joint_vel).sum(dim=-1)
-        rew_joint_vel = self.cfg.rew_imitation_joint_vel * torch.exp(-joint_vel_error / (self.cfg.imitation_sigma_joint_vel ** 2))
+        rew_joint_vel = exp_reward_with_floor(joint_vel_error, self.cfg.rew_imitation_joint_vel, self.cfg.imitation_sigma_joint_vel, floor=6.0)
+        rew_joint_vel = torch.clamp(rew_joint_vel, min=-1.0)  # 避免过度惩罚，最小-2.0
         
         # 3. 根位置 imitation reward
         # 将机器人当前位置转换为相对于环境原点的位置，与参考位置对比
         current_relative_pos = self.robot.data.body_pos_w[:, self.ref_body_index] - self.scene.env_origins
         pos_err = torch.square(current_relative_pos - ref_root_pos).sum(dim=-1)
-        rew_pos = self.cfg.rew_imitation_pos * torch.exp(-pos_err / (self.cfg.imitation_sigma_pos ** 2))
+        rew_pos = exp_reward_with_floor(pos_err, self.cfg.rew_imitation_pos, self.cfg.imitation_sigma_pos, floor=4.0)
+        rew_pos = torch.clamp(rew_pos, min=-1.0)  # 避免位置误差过度惩罚
         
         # 4. 根朝向 imitation reward
         quat_dot = torch.abs(torch.sum(self.robot.data.body_quat_w[:, self.ref_body_index] * ref_root_quat, dim=-1))
@@ -370,6 +373,37 @@ def quaternion_to_tangent_and_normal(q: torch.Tensor) -> torch.Tensor:
     tangent = quat_apply(q, ref_tangent)
     normal = quat_apply(q, ref_normal)
     return torch.cat([tangent, normal], dim=len(tangent.shape) - 1)
+
+
+@torch.jit.script
+def exp_reward_with_floor(error: torch.Tensor, weight: float, sigma: float, floor: float = 3.0) -> torch.Tensor:
+    """
+    分段指数奖励函数：大误差区用线性，小误差区用指数
+    
+    Args:
+        error: 误差值 (已经是平方误差)
+        weight: 奖励权重
+        sigma: 指数函数的标准差参数
+        floor: 切换阈值，单位为sigma²的倍数
+        
+    Returns:
+        分段奖励值
+    """
+    sigma_sq = sigma * sigma
+    threshold = floor * sigma_sq
+    
+    # 指数部分在threshold处的值和梯度
+    exp_val_at_threshold = weight * torch.exp(-floor)
+    linear_slope = weight / sigma_sq * torch.exp(-floor)  # 保证一阶连续
+    
+    # 大误差区：使用线性惩罚 (保持负斜率)
+    linear_reward = exp_val_at_threshold - linear_slope * (error - threshold)
+    
+    # 小误差区：使用指数奖励
+    exp_reward = weight * torch.exp(-error / sigma_sq)
+    
+    # 根据误差大小选择对应的奖励函数
+    return torch.where(error > threshold, linear_reward, exp_reward)
 
 
 @torch.jit.script

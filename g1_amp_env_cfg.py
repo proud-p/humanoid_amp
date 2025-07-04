@@ -30,26 +30,19 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     # rew_joint_acc_l2 = -0.000001          # 关节加速度惩罚，鼓励平滑动作
     # rew_joint_vel_l2 = -0.005           # 关节速度惩罚，稍微减小
     rew_termination = -0.0
-    rew_action_l2 = -0.005
-    rew_joint_pos_limits = -0.1
+    rew_action_l2 = -0.1
+    rew_joint_pos_limits = -10
     rew_joint_acc_l2 = -1.0e-06
     rew_joint_vel_l2 = -0.001
     # imitation reward parameters
     rew_imitation_pos: float = 1.0       # 位置误差奖励：重要，整体轨迹
-    rew_imitation_rot: float = 2.0
+    rew_imitation_rot: float = 0.5
     rew_imitation_joint_pos: float = 2.5
-    rew_imitation_joint_vel: float = 2.0
-    imitation_sigma_pos: float = 0.8
-    imitation_sigma_rot: float = 1.0
-    imitation_sigma_joint_pos: float = 1.2
-    imitation_sigma_joint_vel: float = 2.0
-    # rew_imitation_rot: float = 1.0       # 朝向误差奖励：很重要，身体姿态
-    # rew_imitation_joint_pos: float = 1. # 关节角度奖励：重要但不过度严格
-    # rew_imitation_joint_vel: float = 1.0 # 关节速度奖励：很重要，保证流畅性
-    # imitation_sigma_pos: float = 2     # 位置sigma：适度宽松
-    # imitation_sigma_rot: float = 5.0     # 朝向sigma：适度严格
-    # imitation_sigma_joint_pos: float = 5 # 关节角度sigma：宽松，允许自然变化
-    # imitation_sigma_joint_vel: float = 12 # 关节速度sigma：宽松，鼓励流畅
+    rew_imitation_joint_vel: float = 1.0  # 从2.0降到1.0，减小权重避免过度惩罚
+    imitation_sigma_pos: float = 1.2      # 从0.8调到1.2，配合分段奖励函数
+    imitation_sigma_rot: float = 0.5      # 从1.0调到1.4，给角度误差更大容忍度
+    imitation_sigma_joint_pos: float = 1.5 # 从1.2调到1.5，关节位置容忍度
+    imitation_sigma_joint_vel: float = 8.0 # 从2.5大幅调到8.0，应对300-500的高误差
     # env
     episode_length_s = 10.0
     decimation = 1
