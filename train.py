@@ -185,7 +185,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # https://skrl.readthedocs.io/en/latest/api/utils/runner.html
     runner = Runner(env, agent_cfg)  # type: ignore
     
-    # 设置环境日志记录 - 将runner.agent传递给环境以便直接记录
+    # Set up environment logging - pass runner.agent to environment for direct logging
     if hasattr(env, '_env') and hasattr(env._env, 'unwrapped'):
         actual_env = env._env.unwrapped
     elif hasattr(env, 'unwrapped'):
@@ -193,10 +193,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         actual_env = env
     
-    # 将agent引用传递给环境，这样环境可以直接记录数据
+    # Pass agent reference to environment so it can directly log data
     if hasattr(actual_env, '__setattr__'):
         actual_env._skrl_agent = runner.agent  # type: ignore
-        print("[INFO] 已设置环境直接日志记录到TensorBoard")
+        print("[INFO] Environment direct logging to TensorBoard enabled")
 
     # load checkpoint (if specified)
     if resume_path:
