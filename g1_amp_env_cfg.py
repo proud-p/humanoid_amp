@@ -24,29 +24,37 @@ class G1AmpEnvCfg(DirectRLEnvCfg):
     """Humanoid AMP environment config (base class)."""
     
     # reward
-    rew_termination = -0
-    rew_action_l2 = -0.00
-    rew_joint_pos_limits = -0
-    rew_joint_acc_l2 =-0.00
-    rew_joint_vel_l2= -0.00
-
+    rew_termination = -0.0
+    rew_action_l2 = -0.1
+    rew_joint_pos_limits = -10
+    rew_joint_acc_l2 = -1.0e-06
+    rew_joint_vel_l2 = -0.001
+    # imitation reward parameters
+    rew_imitation_pos = 1.0      
+    rew_imitation_rot = 0.5
+    rew_imitation_joint_pos = 2.5
+    rew_imitation_joint_vel = 1.0 
+    imitation_sigma_pos = 1.2     
+    imitation_sigma_rot = 0.5     
+    imitation_sigma_joint_pos = 1.5 
+    imitation_sigma_joint_vel = 8.0 
     # env
     episode_length_s = 10.0
-    decimation = 2
+    decimation = 1
 
     # spaces
-    observation_space =  71 + 3 * 10 #TODO
+    observation_space =  71 + 3 * (8+5) - 6 + 1  # add progress feature
     action_space = 29
     state_space = 0
-    num_amp_observations = 2
-    amp_observation_space = 71 + 3 * 10
+    num_amp_observations = 3
+    amp_observation_space = 71 + 3 * (8 + 5) - 6 + 1
 
     early_termination = True
     termination_height = 0.5
 
     motion_file: str = MISSING
     reference_body = "pelvis"
-    reset_strategy = "random"  # default, random, random-start
+    reset_strategy = "random-start"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
 
     * default: pose and joint states are set to the initial state of the asset.
