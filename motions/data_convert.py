@@ -1,6 +1,54 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Humanoid Motion Data Converter
+
+This script converts humanoid motion data from CSV format to NPZ format suitable for
+Isaac Lab's Adversarial Motion Prior (AMP) training (only suit CSV format in 
+https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset/blob/main/README.md)
+
+USAGE:
+    python data_convert.py
+    
+DESCRIPTION:
+    This script performs the following operations:
+    1. Reads raw motion capture data from CSV files
+    2. Interpolates data from 30fps to 60fps for smoother motion
+    3. Performs forward kinematics using Pinocchio to compute body poses
+    4. Calculates velocities using central differences and smoothing
+    5. Saves the processed data in NPZ format for Isaac Lab training
+    
+INPUT:
+    - CSV file containing motion capture data (joints positions + root pose)
+    - URDF file defining the robot model
+    - Mesh directory containing 3D models
+    
+OUTPUT:
+    - NPZ file containing:
+        - fps: Sampling rate (60 Hz)
+        - dof_names: Joint names
+        - body_names: Body link names
+        - dof_positions: Joint positions over time
+        - dof_velocities: Joint velocities over time
+        - body_positions: Body positions in world frame
+        - body_rotations: Body orientations (quaternions)
+        - body_linear_velocities: Body linear velocities
+        - body_angular_velocities: Body angular velocities
+        
+REQUIREMENTS:
+    - numpy
+    - pandas
+    - scipy
+    - pinocchio
+    
+CONFIGURATION:
+    - Modify csv_file variable to point to your motion data
+    - Adjust start_idx and end_idx to select frame range
+    - Update urdf_path and mesh_dir for your robot model
+    - Customize joint_names and body_names arrays as needed
+"""
+
 import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
@@ -10,10 +58,10 @@ import pinocchio as pin
 
 
 # -----------------------------------------------
-# 1. 四元数辅助函数
+# 1. Quaternion Helper Functions
 # -----------------------------------------------
 def quaternion_inverse(q):
-    """输入 q: (w, x, y, z)，返回其逆."""
+    """Input q: (w, x, y, z), returns its inverse."""
     w, x, y, z = q
     norm_sq = w*w + x*x + y*y + z*z
     if norm_sq < 1e-8:
@@ -21,7 +69,7 @@ def quaternion_inverse(q):
     return np.array([w, -x, -y, -z], dtype=q.dtype) / norm_sq
 
 def quaternion_multiply(q1, q2):
-    """输入/输出: (w, x, y, z)"""
+    """Input/output: (w, x, y, z)"""
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
     w = w1*w2 - x1*x2 - y1*y2 - z1*z2
@@ -32,10 +80,10 @@ def quaternion_multiply(q1, q2):
 
 def compute_angular_velocity(q_prev, q_next, dt, eps=1e-8):
     """
-    根据相邻两帧四元数 (w, x, y, z) 计算角速度:
-      - 相对旋转 q_rel = inv(q_prev) * q_next
-      - 由 q_rel 得到旋转角度 angle 和旋转轴 axis
-      - 返回 (angle / dt) * axis
+    Compute angular velocity from adjacent quaternions (w, x, y, z):
+      - Relative rotation q_rel = inv(q_prev) * q_next
+      - Extract rotation angle and axis from q_rel
+      - Return (angle / dt) * axis
     """
     q_inv = quaternion_inverse(q_prev)
     q_rel = quaternion_multiply(q_inv, q_next)
@@ -54,18 +102,18 @@ def compute_angular_velocity(q_prev, q_next, dt, eps=1e-8):
 
 
 # -----------------------------------------------
-# 2. 构造 Pinocchio RobotWrapper 的辅助函数
+# 2. Helper Function to Build Pinocchio RobotWrapper
 # -----------------------------------------------
 def build_pin_robot(urdf_path, mesh_dir):
     """
-    读取 URDF 文件，构造带 free-flyer 的 pin.RobotWrapper。
-    参数:
-        urdf_path: URDF 的路径
-        mesh_dir: 关联的几何文件所在文件夹
-    返回:
+    Load URDF file and construct a pin.RobotWrapper with free-flyer.
+    Args:
+        urdf_path: Path to the URDF file
+        mesh_dir: Directory containing associated mesh files
+    Returns:
         robot (pin.RobotWrapper)
     """
-    # 注意：若 URDF 已经包含浮动关节，这里可改用 BuildFromURDF(urdf_path, ...)
+    # Note: If URDF already contains floating joint, you can modify this to use BuildFromURDF(urdf_path, ...)
     robot = pin.RobotWrapper.BuildFromURDF(
         urdf_path,
         mesh_dir,
@@ -75,10 +123,10 @@ def build_pin_robot(urdf_path, mesh_dir):
 
 
 # -----------------------------------------------
-# 3. 主转换流程
+# 3. Main Conversion Pipeline
 # -----------------------------------------------
 def main():
-    # 3.1 读取 CSV 数据并取出需要的帧（改为帧250~550）
+    # 3.1 Read CSV data and extract desired frame range (changed to frames 250~550)
     csv_file = "g1/dance1_subject2.csv"
     df = pd.read_csv(csv_file, header=None)
     start_idx = 250
@@ -89,45 +137,45 @@ def main():
     # end_idx = 300
     data_orig = df.iloc[start_idx:end_idx].to_numpy(dtype=np.float32)
     N_orig = data_orig.shape[0]
-    print(f"读取 CSV: {csv_file}, 帧范围[{start_idx}:{end_idx}], 共 {N_orig} 帧.")
+    print(f"Loading CSV: {csv_file}, frame range [{start_idx}:{end_idx}], total {N_orig} frames.")
 
-    # 原始 CSV 前7列为 root 数据，之后为其他关节
+    # Original CSV: first 7 columns are root data, remaining are joint data
     root_data_orig = data_orig[:, :7]      # (N_orig, 7)
     joint_data_orig = data_orig[:, 7:]       # (N_orig, D)
 
-    # 3.2 定义原始采样率 (30fps) 和新采样率 (60fps)，构造时间序列
+    # 3.2 Define original sampling rate (30fps) and new sampling rate (60fps), construct time series
     fps_orig = 30
     dt_orig = 1.0 / fps_orig
     t_orig = np.linspace(0, (N_orig - 1) * dt_orig, N_orig)
 
     fps_new = 60
     dt_new = 1.0 / fps_new
-    N_new = 2 * N_orig - 1   # 在两帧之间插入一个新帧
+    N_new = 2 * N_orig - 1   # Insert one new frame between every two frames
     t_new = np.linspace(0, (N_orig - 1) * dt_orig, N_new)
 
-    # 3.3 对 root_data 的位置和关节角度进行插值
-    # 位置（前三列）采用线性插值
+    # 3.3 Interpolate root_data positions and joint angles
+    # Linear interpolation for positions (first three columns)
     root_pos_interp = interp1d(t_orig, root_data_orig[:, 0:3], axis=0, kind='linear')(t_new)
 
-    # 对四元数部分 (qx, qy, qz, qw) 使用 Slerp 插值
-    # 注意：四元数在 CSV 中存储顺序为 (qx, qy, qz, qw)，符合 scipy 的要求
+    # Slerp interpolation for quaternions (qx, qy, qz, qw)
+    # Note: Quaternions in CSV are stored as (qx, qy, qz, qw), which matches scipy requirements
     rotations_orig = R.from_quat(root_data_orig[:, 3:7])
     slerp = Slerp(t_orig, rotations_orig)
     rotations_new = slerp(t_new)
-    root_quat_interp = rotations_new.as_quat()  # (N_new, 4) 依旧为 (qx, qy, qz, qw)
+    root_quat_interp = rotations_new.as_quat()  # (N_new, 4) still (qx, qy, qz, qw)
 
-    # 合并插值后的 root 数据
+    # Combine interpolated root data
     root_data = np.hstack((root_pos_interp, root_quat_interp))  # (N_new, 7)
 
-    # 对关节角度（joint_data）采用线性插值
+    # Linear interpolation for joint angles (joint_data)
     joint_data = interp1d(t_orig, joint_data_orig, axis=0, kind='linear')(t_new)
 
-    # 更新帧数、采样率和时间间隔
+    # Update frame count, sampling rate, and time interval
     N = N_new
     fps = fps_new
     dt = dt_new
 
-    # 3.4 定义关节名称 
+    # 3.4 Define joint names 
     joint_names = [
         "left_hip_pitch_joint",
         "left_hip_roll_joint",
@@ -161,17 +209,17 @@ def main():
     ]
     dof_names = np.array(joint_names, dtype=np.str_)
 
-    # 3.5 取关节位置 (不含 Root)
+    # 3.5 Get joint positions (excluding Root)
     dof_positions = joint_data.copy()      # shape: (N, D)
 
-    # 3.6 计算关节速度 (中心差分 + 边界前后差分 + 高斯平滑)
+    # 3.6 Calculate joint velocities (central differences + boundary forward/backward differences + Gaussian smoothing)
     dof_velocities = np.zeros_like(dof_positions)
     dof_velocities[1:-1] = (dof_positions[2:] - dof_positions[:-2]) / (2 * dt)
     dof_velocities[0] = (dof_positions[1] - dof_positions[0]) / dt
     dof_velocities[-1] = (dof_positions[-1] - dof_positions[-2]) / dt
     dof_velocities_smoothed = gaussian_filter1d(dof_velocities, sigma=1, axis=0)
 
-    # 3.7 指定要记录的 link 名称，并在全局坐标系下获取其位姿
+    # 3.7 Specify link names to record and get their poses in global coordinate frame
     body_names = [
         "pelvis", 
         # "head_link",
@@ -195,42 +243,42 @@ def main():
     body_positions = np.zeros((N, B, 3), dtype=np.float32)
     body_rotations = np.zeros((N, B, 4), dtype=np.float32)
 
-    # 3.8 构建 pin.RobotWrapper
-    #    （请将 urdf_path 和 mesh_dir 改为你自己的实际路径）
+    # 3.8 Build pin.RobotWrapper
+    #    (Please change urdf_path and mesh_dir to your actual paths)
     urdf_path = "robot_description/g1/g1_29dof_rev_1_0.urdf"
     mesh_dir = "robot_description/g1"
     robot = build_pin_robot(urdf_path, mesh_dir)
     model = robot.model
     data_pk = robot.data
 
-    nq = model.nq  # 总自由度(含free-flyer)
+    nq = model.nq  # Total DOF (including free-flyer)
     if (7 + joint_data.shape[1]) != nq:
-        print(f"注意: CSV 列数={7 + joint_data.shape[1]}, 但 pinocchio nq={nq}, 可能需要检查或调整脚本解析方式.")
+        print(f"Warning: CSV columns={7 + joint_data.shape[1]}, but pinocchio nq={nq}, may need to check or adjust script parsing.")
 
-    # 3.9 对每帧做正向运动学 (FK)，获取各 link 在世界坐标系下的姿态
+    # 3.9 Perform forward kinematics (FK) for each frame to get link poses in world coordinate frame
     q_pin = pin.neutral(model)
 
     for i in range(N):
-        # 设置 free-flyer
+        # Set free-flyer
         q_pin[0:3] = root_data[i, 0:3]
-        # root_data 中存储的四元数顺序为 (qx, qy, qz, qw)
+        # Quaternions stored in root_data are in (qx, qy, qz, qw) order
         q_pin[3:7] = root_data[i, 3:7]
-        # 其余关节
+        # Other joints
         dofD = joint_data.shape[1]
         q_pin[7:7 + dofD] = joint_data[i, :]
 
-        # FK
+        # Forward kinematics
         pin.forwardKinematics(model, data_pk, q_pin)
         pin.updateFramePlacements(model, data_pk)
 
-        # 读取并保存各 link 的全局位姿
+        # Read and save global poses for each link
         for j, link_name in enumerate(body_names):
             fid = model.getFrameId(link_name)
-            link_tf = data_pk.oMf[fid]  # 该 link 在世界系下的变换
+            link_tf = data_pk.oMf[fid]  # Link transformation in world frame
 
-            # 平移
+            # Translation
             body_positions[i, j, :] = link_tf.translation
-            # 旋转 (pin.Quaternion 默认 (x,y,z,w)，需转为 (w,x,y,z))
+            # Rotation (pin.Quaternion defaults to (x,y,z,w), need to convert to (w,x,y,z))
             quat_xyzw = pin.Quaternion(link_tf.rotation)
             body_rotations[i, j, :] = np.array([quat_xyzw.w,
                                                 quat_xyzw.x,
@@ -238,15 +286,15 @@ def main():
                                                 quat_xyzw.z],
                                                dtype=np.float32)
 
-    # 3.10 计算 body 的线速度与角速度 (在世界坐标系下)
-    # -- 线速度：中心差分 --
+    # 3.10 Calculate body linear and angular velocities (in world coordinate frame)
+    # -- Linear velocities: central differences --
     body_linear_velocities = np.zeros_like(body_positions)
     body_linear_velocities[1:-1] = (body_positions[2:] - body_positions[:-2]) / (2 * dt)
     body_linear_velocities[0] = (body_positions[1] - body_positions[0]) / dt
     body_linear_velocities[-1] = (body_positions[-1] - body_positions[-2]) / dt
     body_linear_velocities = gaussian_filter1d(body_linear_velocities, sigma=1, axis=0)
 
-    # -- 角速度：由相邻四元数计算 (世界坐标系下) --
+    # -- Angular velocities: computed from adjacent quaternions (in world coordinate frame) --
     body_angular_velocities = np.zeros((N, B, 3), dtype=np.float32)
     for j in range(B):
         quats = body_rotations[:, j, :]
@@ -258,14 +306,14 @@ def main():
             av1 = compute_angular_velocity(quats[k - 1], quats[k], dt)
             av2 = compute_angular_velocity(quats[k], quats[k + 1], dt)
             angular_vels[k] = 0.5 * (av1 + av2)
-        # 平滑
+        # Smoothing
         body_angular_velocities[:, j, :] = gaussian_filter1d(angular_vels, sigma=1, axis=0)
 
-    # 3.11 打包保存到 NPZ
+    # 3.11 Package and save to NPZ
     data_dict = {
-        "fps": fps,                                   # int64 标量，采样帧率
-        "dof_names": dof_names,                       # unicode 数组 (D,)
-        "body_names": body_names,                     # unicode 数组 (B,)
+        "fps": fps,                                   # int64 scalar, sampling rate
+        "dof_names": dof_names,                       # unicode array (D,)
+        "body_names": body_names,                     # unicode array (B,)
         "dof_positions": dof_positions,               # float32 (N, D)
         "dof_velocities": dof_velocities_smoothed,    # float32 (N, D)
         "body_positions": body_positions,             # float32 (N, B, 3)
@@ -277,7 +325,7 @@ def main():
     out_filename = "g1.npz"
     np.savez(out_filename, **data_dict)
 
-    print(f"已完成转换，数据保存在 {out_filename}")
+    print(f"Conversion completed, data saved to {out_filename}")
     print("fps:", fps)
     print("dof_names:", dof_names.shape)
     print("body_names:", body_names.shape)
