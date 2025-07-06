@@ -13,7 +13,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils.math import quat_rotate
+from isaaclab.utils.math import quat_apply
 
 from .g1_amp_env_cfg import G1AmpEnvCfg
 from .motions import MotionLoader
@@ -30,16 +30,12 @@ class G1AmpEnv(DirectRLEnv):
         dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1]
         self.action_offset = 0.5 * (dof_upper_limits + dof_lower_limits)
         self.action_scale = dof_upper_limits - dof_lower_limits
-        # self.pre_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
-        # print("DOF LIMITS")
-        # print(dof_lower_limits)
-        # print(dof_upper_limits)
+
 
         # load motion
         self._motion_loader = MotionLoader(motion_file=self.cfg.motion_file, device=self.device)
 
         # DOF and key body indexes  
-        # key_body_names = ["pelvis"]  
         key_body_names = [ "left_shoulder_pitch_link",
             "right_shoulder_pitch_link",
             "left_elbow_link",
@@ -50,11 +46,7 @@ class G1AmpEnv(DirectRLEnv):
             "left_rubber_hand",
             "right_ankle_roll_link",
             "left_ankle_roll_link"]
-        # key_body_names = [
-        #     "right_rubber_hand",
-        #     "left_rubber_hand",
-        #     "right_ankle_roll_link",
-        #     "left_ankle_roll_link"]
+
         self.ref_body_index = self.robot.data.body_names.index(self.cfg.reference_body)
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
         # Used to for reset strategy
@@ -246,8 +238,8 @@ def quaternion_to_tangent_and_normal(q: torch.Tensor) -> torch.Tensor:
     ref_normal = torch.zeros_like(q[..., :3])
     ref_tangent[..., 0] = 1
     ref_normal[..., -1] = 1
-    tangent = quat_rotate(q, ref_tangent)
-    normal = quat_rotate(q, ref_normal)
+    tangent = quat_apply(q, ref_tangent)
+    normal = quat_apply(q, ref_normal)
     return torch.cat([tangent, normal], dim=len(tangent.shape) - 1)
 
 
