@@ -67,8 +67,10 @@ Or you can also use the data from [AMASS](https://huggingface.co/datasets/ember-
 
 
 ## Resources
+[![Demo - Walk](https://img.shields.io/badge/Demo-Walk-ff69b4?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV19cRvYhEL8/?vd_source=5159ce41348cd4fd3d83ef9169dc8dbc)
+[![Demo - Dance (Bilibili)](https://img.shields.io/badge/Demo-Dance-ff69b4?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV1vW36zEEG8/?share_source=copy_web&vd_source=0de36dd681c4f7ffab776ec97939e21f)
+[![Demo - Dance (YouTube)](https://img.shields.io/badge/Demo-Dance-FF0000?style=for-the-badge&logo=youtube)](https://youtu.be/_ItIFkp-Xi4)
 
-[![Demo Video](https://img.shields.io/badge/Demo-Bilibili-ff69b4?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV19cRvYhEL8/?vd_source=5159ce41348cd4fd3d83ef9169dc8dbc)
 [![Documentation](https://img.shields.io/badge/Documentation-DeepWiki-blue?style=for-the-badge&logo=gitbook)](https://deepwiki.com/linden713/humanoid_amp)
 
 **Contributions**, **discussions**, and **stars** are all welcome! ❥(^_-)
