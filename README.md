@@ -35,7 +35,9 @@ or
 ./isaaclab.sh -p -m tensorboard.main --logdir logs/skrl/
 ```
 
-Training walk motion in the master branch. Dance motion in the dance branch. The usage of some helper script functions is explained at the beginning of the file.
+Walk training: `master` branch. Dance training: **`dance`** branch.
+
+The usage of some helper script functions is explained at the beginning of the file.
 
 
 
